@@ -14,7 +14,8 @@ class CalendarController extends Controller
 {
     public function index(Request $request): View
     {
-        $month = Carbon::createFromFormat('Y-m', (string) $request->query('month', now()->format('Y-m')))->startOfMonth();
+        $requested = (string) $request->query('month', '');
+        $month = (preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $requested) ? Carbon::createFromFormat('Y-m', $requested) : now())->startOfMonth();
         $start = $month->copy()->startOfWeek(Carbon::MONDAY);
         $end = $month->copy()->endOfMonth()->endOfWeek(Carbon::SUNDAY);
 

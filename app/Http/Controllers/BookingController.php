@@ -60,8 +60,13 @@ class BookingController extends Controller
         ]));
         $booking->activities()->create(['type' => 'created', 'body' => 'Request received from the website.']);
 
-        if ($recipient = User::first()) {
-            $recipient->notify(new NewBookingNotification($booking));
+        try {
+            foreach (User::all() as $recipient) {
+                $recipient->notify(new NewBookingNotification($booking));
+            }
+        } catch (\Throwable $e) {
+            report($e); // the request is saved and visible in the dashboard even if the alert email fails
+            $booking->activities()->create(['type' => 'note', 'body' => 'Email alert could not be sent: '.$e->getMessage()]);
         }
 
         return $booking;

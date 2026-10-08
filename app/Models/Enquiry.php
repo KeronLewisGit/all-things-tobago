@@ -19,7 +19,13 @@ class Enquiry extends Model
     protected static function booted(): void
     {
         static::creating(function (Enquiry $enquiry) {
-            $enquiry->reference ??= 'ENQ-'.strtoupper(Str::random(6));
+            if ($enquiry->reference) {
+                return;
+            }
+            do {
+                $reference = 'ENQ-'.strtoupper(Str::random(6));
+            } while (static::where('reference', $reference)->exists());
+            $enquiry->reference = $reference;
         });
     }
 

@@ -30,7 +30,11 @@ class Weather
             return null;
         }
 
-        return Cache::remember('weather.today', now()->addMinutes(30), function () {
+        $cached = Cache::get('weather.today');
+        if ($cached !== null) {
+            return $cached === 'unavailable' ? null : $cached;
+        }
+        $result = (function () {
             try {
                 $w = Http::timeout(4)->get('https://api.open-meteo.com/v1/forecast', [
                     'latitude' => self::LAT, 'longitude' => self::LON,
@@ -57,6 +61,10 @@ class Weather
             } catch (\Throwable) {
                 return null;
             }
-        });
+        })();
+        // Null is never cached by Cache::remember, so a failing API would be retried (8s of timeouts) on every page.
+        Cache::put('weather.today', $result ?? 'unavailable', now()->addMinutes($result ? 30 : 10));
+
+        return $result;
     }
 }

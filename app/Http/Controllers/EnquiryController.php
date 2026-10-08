@@ -19,8 +19,12 @@ class EnquiryController extends Controller
 
         $enquiry = Enquiry::create($request->validated());
 
-        if ($recipient = User::first()) {
-            $recipient->notify(new NewEnquiryNotification($enquiry));
+        try {
+            foreach (User::all() as $recipient) {
+                $recipient->notify(new NewEnquiryNotification($enquiry));
+            }
+        } catch (\Throwable $e) {
+            report($e); // the enquiry is saved and listed in the dashboard even if the alert email fails
         }
 
         return back()->with('enquiry_success', ['reference' => $enquiry->reference, 'name' => Str::before($enquiry->name, ' '), 'type' => $enquiry->type]);

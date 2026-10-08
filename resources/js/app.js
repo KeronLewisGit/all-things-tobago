@@ -32,25 +32,13 @@ Alpine.data('countUp', (target, duration = 1400) => ({
     },
 }));
 
-/**
- * Booking widget: date picker with blackout days, party size, live estimate.
- * price / priceType / min / max come from the experience; blackouts is an array of YYYY-MM-DD.
- */
-Alpine.data('booking', (cfg) => ({
-    price: cfg.price, priceType: cfg.priceType, min: cfg.min || 1, max: cfg.max || 10,
-    blackouts: new Set(cfg.blackouts || []),
-    adults: cfg.adults || 2, children: cfg.children || 0,
-    date: cfg.date || '', month: null, slot: cfg.slot || 'morning',
-    init() {
+/** Month calendar shared by the booking widget and the trip planner: past days and blackout days cannot be picked. */
+const calendar = (cfg) => ({
+    date: cfg.date || '', month: null, blackouts: new Set(cfg.blackouts || []),
+    initCalendar() {
         const d = this.date ? new Date(this.date + 'T00:00:00') : new Date();
         this.month = new Date(d.getFullYear(), d.getMonth(), 1);
     },
-    get guests() { return this.adults + this.children; },
-    get estimate() {
-        if (this.priceType === 'group') return this.price;
-        return this.price * this.adults + this.price * 0.5 * this.children;
-    },
-    get estimateLabel() { return Alpine.store('currency').format(this.estimate); },
     get monthLabel() { return this.month.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }); },
     get dateLabel() { return this.date ? new Date(this.date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Pick a date'; },
     prevMonth() { this.month = new Date(this.month.getFullYear(), this.month.getMonth() - 1, 1); },
@@ -66,25 +54,41 @@ Alpine.data('booking', (cfg) => ({
         for (let d = 1; d <= daysInMonth; d++) {
             const date = new Date(this.month.getFullYear(), this.month.getMonth(), d);
             const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            let state = 'open';
-            if (date < today) state = 'past';
-            else if (this.blackouts.has(iso)) state = 'full';
+            let state = date < today ? 'past' : this.blackouts.has(iso) ? 'full' : 'open';
             if (iso === this.date) state = 'selected';
             cells.push({ d, iso, state });
         }
         return cells;
     },
     pick(cell) { if (cell && (cell.state === 'open' || cell.state === 'selected')) this.date = cell.iso; },
+});
+
+/** Merge the calendar into a component without evaluating its getters (object spread would freeze them). */
+const withCalendar = (cfg, component) => Object.defineProperties(component, Object.getOwnPropertyDescriptors(calendar(cfg)));
+
+/**
+ * Booking widget: date picker with blackout days, party size, live estimate.
+ * price / priceType / min / max come from the experience; blackouts is an array of YYYY-MM-DD.
+ */
+Alpine.data('booking', (cfg) => withCalendar(cfg, {
+    price: cfg.price, priceType: cfg.priceType, min: cfg.min || 1, max: cfg.max || 10,
+    adults: cfg.adults || 2, children: cfg.children || 0, slot: cfg.slot || 'morning',
+    init() { this.initCalendar(); },
+    get guests() { return this.adults + this.children; },
+    get estimate() {
+        if (this.priceType === 'group') return this.price;
+        return this.price * this.adults + this.price * 0.5 * this.children;
+    },
+    get estimateLabel() { return Alpine.store('currency').format(this.estimate); },
     inc(key) { if (this.guests < this.max) this[key]++; },
     dec(key, floor) { if (this[key] > floor) this[key]--; },
 }));
 
 /** Trip planner: pick several experiences, see the day's total. */
-Alpine.data('planner', (cfg) => ({
+Alpine.data('planner', (cfg) => withCalendar(cfg, {
     catalogue: cfg.experiences, picked: new Set(cfg.picked || []),
-    adults: cfg.adults || 2, children: cfg.children || 0, filter: 'all',
-    date: cfg.date || '', month: null, blackouts: new Set(cfg.blackouts || []), slot: 'morning',
-    init() { const d = new Date(); this.month = new Date(d.getFullYear(), d.getMonth(), 1); },
+    adults: cfg.adults || 2, children: cfg.children || 0, filter: 'all', slot: 'morning',
+    init() { this.initCalendar(); },
     toggle(slug) { this.picked.has(slug) ? this.picked.delete(slug) : this.picked.add(slug); this.picked = new Set(this.picked); },
     has(slug) { return this.picked.has(slug); },
     get items() { return this.catalogue.filter((e) => this.picked.has(e.slug)); },
@@ -96,28 +100,6 @@ Alpine.data('planner', (cfg) => ({
     get guests() { return this.adults + this.children; },
     inc(key) { if (this.guests < 30) this[key]++; },
     dec(key, floor) { if (this[key] > floor) this[key]--; },
-    get monthLabel() { return this.month.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }); },
-    get dateLabel() { return this.date ? new Date(this.date + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Pick a date'; },
-    prevMonth() { this.month = new Date(this.month.getFullYear(), this.month.getMonth() - 1, 1); },
-    nextMonth() { this.month = new Date(this.month.getFullYear(), this.month.getMonth() + 1, 1); },
-    get canPrev() { const now = new Date(); return this.month > new Date(now.getFullYear(), now.getMonth(), 1); },
-    get cells() {
-        const first = new Date(this.month.getFullYear(), this.month.getMonth(), 1);
-        const offset = (first.getDay() + 6) % 7;
-        const daysInMonth = new Date(this.month.getFullYear(), this.month.getMonth() + 1, 0).getDate();
-        const today = new Date(); today.setHours(0, 0, 0, 0);
-        const cells = [];
-        for (let i = 0; i < offset; i++) cells.push(null);
-        for (let d = 1; d <= daysInMonth; d++) {
-            const date = new Date(this.month.getFullYear(), this.month.getMonth(), d);
-            const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            let state = date < today ? 'past' : this.blackouts.has(iso) ? 'full' : 'open';
-            if (iso === this.date) state = 'selected';
-            cells.push({ d, iso, state });
-        }
-        return cells;
-    },
-    pick(cell) { if (cell && (cell.state === 'open' || cell.state === 'selected')) this.date = cell.iso; },
 }));
 
 /** Share / copy helpers for experience pages. */

@@ -35,7 +35,13 @@ class Booking extends Model
     protected static function booted(): void
     {
         static::creating(function (Booking $booking) {
-            $booking->reference ??= 'ATT-'.strtoupper(Str::random(6));
+            if ($booking->reference) {
+                return;
+            }
+            do {
+                $reference = 'ATT-'.strtoupper(Str::random(6));
+            } while (static::where('reference', $reference)->exists());
+            $booking->reference = $reference;
         });
     }
 
