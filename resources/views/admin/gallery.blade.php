@@ -1,0 +1,7 @@
+<x-admin title="Gallery">
+    <h1 class="font-display text-3xl font-bold">Gallery</h1><p class="mt-1 text-sm text-muted">Photos for the Instagram strip on the home page. Add the post link so each tile opens the original.</p>
+    <form method="post" action="{{ route('admin.gallery.store') }}" enctype="multipart/form-data" class="mt-6 grid gap-4 rounded-3xl bg-white p-5 ring-1 ring-line/70 sm:grid-cols-[1fr_1fr_auto] sm:items-end">@csrf<div><label class="label">Photos (up to 12)</label><input type="file" name="images[]" multiple accept="image/*" class="block w-full text-sm" required></div><x-field name="instagram_url" label="Instagram post link (optional)" type="url" /><button class="btn btn-primary">Upload</button></form>
+    <div class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+        @forelse ($items as $item)<div class="group relative aspect-square overflow-hidden rounded-2xl"><img src="{{ $item->url() }}" alt="{{ $item->caption }}" class="h-full w-full object-cover"><form method="post" action="{{ route('admin.gallery.destroy', $item) }}" class="absolute top-2 right-2" onsubmit="return confirm('Remove this photo?')">@csrf @method('DELETE')<button class="grid size-8 place-items-center rounded-full bg-white/90 text-rose-600 shadow" aria-label="Remove"><x-icon name="trash-2" class="size-4" /></button></form></div>@empty<p class="col-span-full text-sm text-muted">No photos yet. Until you add some, the home page shows the experience illustrations.</p>@endforelse
+    </div>
+</x-admin>
